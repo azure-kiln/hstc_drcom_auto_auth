@@ -1,4 +1,6 @@
 #!/bin/bash
+# check_loop.sh
+# 循环检测联网状态
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 echo "$SCRIPT_DIR"
 

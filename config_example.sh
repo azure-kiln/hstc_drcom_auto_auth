@@ -4,27 +4,50 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 # User-Agent 信息
 USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"
 
-# 以什么身份上网   1:PC  2:移动设备
-MAC_TYPE="1"
-
 # 获取本机内网 IP 地址 (适用于 ifconfig 工具)
-# OpenWrt X86软路由WAN eth0
+# OpenWrt 路由WAN wan
+# OpenWrt X86软路由WAN eth0/eth1
 # Pavadan 老毛子WAN eth3
 WAN_PORT="eth1"
 
+# 路由器WAN口IP地址
 WAN_IP_ADDRESS=$(ifconfig $WAN_PORT | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1 }')
 
-# URL
-VERIFY_IP="192.168.2.34"
-VERIFY_URL="http://$VERIFY_IP/"
-LOGIN_URL="https://hscas.hstc.edu.cn/cas/login"
-GET_TICKER_URL="$LOGIN_URL?service=http%3A%2F%2F$VERIFY_IP%3A801%2Feportal%2F%3Fc%3DCustom%26a%3Dlogin%26login_method%3D1%26wlan_user_ip%3D$WAN_IP_ADDRESS%26wlan_user_ipv6%3D%26wlan_user_mac%3D111111111111%26wlan_ac_ip%3D%26wlan_ac_name%3D%26mac_type%3D$MAC_TYPE%26type%3D1"
+# Dr.COM服务器地址
+DRCOM_SERVER_IP="192.168.2.34"
+# CAS统一身份认证地址
+HSCAS_URL="https://hscas.hstc.edu.cn"
 
-# LOGIN_POSTBODY
-USERNAME="2024xxxxxxxx"
+# 上网认证URL
+VERIFY_URL="http://$DRCOM_SERVER_IP/"
+# CAS统一身份认证登录URL
+HSCAS_LOGIN_URL="$HSCAS_URL/cas/login"
+
+# 网页授权链接参数
+EPORTAL_API="http://$DRCOM_SERVER_IP:801/eportal/portal"
+AUTHORIZATION_API="http://192.168.2.34:801/eportal/portal/cas/create"   # page.portal_api + 'cas/create'
+output_status "$LOG_FILE" "Authorization api: $AUTHORIZATION_API"
+
+LOGIN_METHOD="1"                                # page.login_method
+TERM_IP="$WAN_IP_ADDRESS"                        # term.ip
+TERM_IPV6=""                                         # term.ipv6
+TERM_MAC="AA:BB:CC:DD:EE:FF"                          # term.mac
+WLAN_AC_IP="10.10.10.10"                         # term.wlanacip
+WLAN_AC_NAME="AC001"                             # term.wlanacname
+AUTHEX_ENABLE="1"                                # term.authex_enable
+JS_VERSION="4.X"                                # jsVersion
+
+# 以什么身份上网   1:PC  2:移动设备
+# 计算 mac_type
+MAC_TYPE="2"
+
+# 用户名/密码 请求头
+USERNAME="202400000000"
 PASSWORD=""
+
+# 登录信息 请求头 LOGIN_POSTBODY
 EXECUTION=""
-LOGIN_POSTBODY="username=$USERNAME&password=$PASSWORD&captcha=&currentMenu=1&failN=0&mfaState=&execution=$EXECUTION&_eventId=submit&geolocation=&submit=%E7%99%BB%E5%BD%95"
+LOGIN_POSTBODY="username=$USERNAME&password=$PASSWORD&currentMenu=1&failN=0&execution=$EXECUTION&_eventId=submit&geolocation=&submit=%E7%99%BB%E5%BD%95"
 
 # 日志文件路径
 LOG_DIR="$SCRIPT_DIR/logs"
@@ -55,4 +78,7 @@ output_status() {
 }
 
 output_status "$LOG_FILE" "Current directory: $SCRIPT_DIR"
+output_status "$LOG_FILE" "Current User-Agent: $USER_AGENT"
+output_status "$LOG_FILE" "Current WAN PORT: $WAN_PORT"
 output_status "$LOG_FILE" "Current WAN IP address: $WAN_IP_ADDRESS"
+output_status "$LOG_FILE" "Current Username: $USERNAME"

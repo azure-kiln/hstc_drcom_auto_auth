@@ -10,45 +10,36 @@ else
     exit 1
 fi
 
-crash -s stop
-# 发起 POST 请求，发送用户名，并记录 Cookie，同时输出和保存响应内容
-output_status "$LOG_FILE" "Executing POST request to $LOGIN_URL"
-POST_RESPONSE=$(curl -c $COOKIE_FILE -d "$LOGIN_POSTBODY" -X POST -s -o $POST_RESPONSE_CONTENT -w "%{http_code}" $LOGIN_URL)
+# 请求Dr.COM 801端口获取网页授权链接
+output_status "$STATUS_LOG_FILE" "Sending identity_login request: $AUTHORIZATION_API"
+RESPONSE=$(curl -s -G "$AUTHORIZATION_API" \
+    --data-urlencode "login_method=$LOGIN_METHOD" \
+    --data-urlencode "wlan_user_ip=$TERM_IP" \
+    --data-urlencode "wlan_user_ipv6=$TERM_IPV6" \
+    --data-urlencode "wlan_user_mac=$TERM_MAC" \
+    --data-urlencode "wlan_ac_ip=$WLAN_AC_IP" \
+    --data-urlencode "wlan_ac_name=$WLAN_AC_NAME" \
+    --data-urlencode "authex_enable=$AUTHEX_ENABLE" \
+    --data-urlencode "mac_type=$MAC_TYPE" \
+--data-urlencode "jsVersion=$JS_VERSION")
 
-# 检查智慧韩园是否登录成功
-POST_SUCCESS=false
-if grep -q "successRedirectUrl" "$POST_RESPONSE_CONTENT" || grep -q "登录成功" "$POST_RESPONSE_CONTENT" || grep -q "Log In Successful" "$POST_RESPONSE_CONTENT"; then
-    POST_SUCCESS=true
-fi
+# 解析响应内容
+output_status "$STATUS_LOG_FILE" "[response] $RESPONSE"
+JSON=$(echo "$RESPONSE" | sed -e 's/^jsonpReturn(//' -e 's/);$//')
+output_status "$STATUS_LOG_FILE" "[JSON] $JSON"
 
-# 如果智慧韩园登录成功
-if [ "$POST_SUCCESS" = true ] && [ "$POST_RESPONSE" -eq 200 ]; then
-    output_status "$STATUS_LOG_FILE" "Log In hstc Successful."
-    output_status "$STATUS_LOG_FILE" "Executing GET request to $GET_TICKER_URL to get ticker."
+# 解析 result 字段
+RESULT=$(echo "$JSON" | grep -o '"result"[ ]*:[ ]*[^,}]*' | cut -d ':' -f 2 | tr -d ' "')
+output_status "$STATUS_LOG_FILE" "[RESULT] $RESULT"
 
-    GET_RESPONSE=$(curl -b $COOKIE_FILE -H "User-Agent: $USER_AGENT" -s -w "%{http_code}" -D $HEADERS_FILE $GET_TICKER_URL | tee $GET_RESPONSE_CONTENT)
-
-    # 检查 GET 请求的响应码
-    if [ "$GET_RESPONSE" -eq 302 ]; then
-        # 获取门票URL
-        LOCATION=$(grep -i "Location" $HEADERS_FILE | awk '{print $2}' | tr -d '\r')
-        output_status "$STATUS_LOG_FILE" "Get the ticker successful:$LOCATION"
-        # 发起第三次 GET 请求，验证门票信息，并保存响应内容
-        output_status "$STATUS_LOG_FILE" "Executing the ticker url GET request to verify ticker..."
-        THIRD_GET_RESPONSE=$(curl -b $COOKIE_FILE -H "User-Agent: $USER_AGENT" -s -o $THIRD_GET_RESPONSE_CONTENT -w "%{http_code}" $LOCATION)
-        if [ "$THIRD_GET_RESPONSE" -eq 302 ]; then
-            crash -s start
-            output_status "$STATUS_LOG_FILE" "Verify ticker Successful."
-            exit 0
-        else
-            output_status "$STATUS_LOG_FILE" "Verify ticker failed."
-            exit 3
-        fi
-    else
-        output_status "$STATUS_LOG_FILE" "Get the ticker failed. "
-        exit 2
-    fi
+if [ "$RESULT" = "1" ] || [ "$RESULT" = "ok" ]; then
+    AUTHORIZE_URI=$(echo "$JSON" | sed -n 's/.*"authorize_uri"[ ]*:[ ]*"\([^"]*\)".*/\1/p')
+    AUTHORIZE_URI=$(echo "$AUTHORIZE_URI" | sed 's#\\/#/#g')
+    output_status "$STATUS_LOG_FILE" "Successfully obtained authorize URL: $AUTHORIZE_URI"
+    output_status "$STATUS_LOG_FILE" "Attempting to login to HSCAS..."
+    "$SCRIPT_DIR/hscas_login.sh" "$AUTHORIZE_URI"
 else
-    output_status "$STATUS_LOG_FILE" "Log In hstc failed."
+    MSG=$(echo "$RESPONSE" | grep -o '"msg"[ ]*:[ ]*"[^"]*"' | cut -d '"' -f 4)
+    echo "Get authorize url failed: $MSG"
     exit 1
 fi
